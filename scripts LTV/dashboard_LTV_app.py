@@ -317,4 +317,5 @@ def actualizar_dashboard(start, end, affiliates, countries):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=8053)
+    app.run_server(debug=True, port=8053)
+
