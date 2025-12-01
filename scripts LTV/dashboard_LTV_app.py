@@ -90,7 +90,7 @@ for col in ["country", "affiliate"]:
         df[col] = df[col].astype(str).str.strip().str.title()
         df[col].replace({"Nan": None, "None": None, "": None}, inplace=True)
 
-# === 6️⃣ Eliminar duplicados exactos (clave: fecha + país + afiliado) ===
+# === 6️⃣ Eliminar duplicados exactos ===
 df = df.drop_duplicates(subset=["date", "country", "affiliate"], keep="last")
 
 fecha_min, fecha_max = df["date"].min(), df["date"].max()
@@ -105,10 +105,17 @@ def formato_km(valor):
         return f"{valor:.0f}"
 
 
-# === 8️⃣ Inicializar app ===
-app = dash.Dash(__name__)
+# === 8️⃣ Inicializar app con librerías externas ===
+external_scripts = [
+    "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.10.0/pptxgen.bundle.js"
+]
+
+app = dash.Dash(__name__, external_scripts=external_scripts)
 server = app.server
 app.title = "OBL Digital — GENERAL LTV Dashboard"
+
 
 # === 9️⃣ Layout ===
 app.layout = html.Div(
@@ -140,7 +147,6 @@ app.layout = html.Div(
                         "textAlign": "center",
                     },
                     children=[
-                        # === Filtro de Fecha ===
                         html.H4("Date", style={"color": "#D4AF37"}),
                         dcc.DatePickerRange(
                             id="filtro-fecha",
@@ -149,29 +155,21 @@ app.layout = html.Div(
                             display_format="YYYY-MM-DD",
                             style={"marginBottom": "25px"},
                         ),
-
-                        # === Filtro de Affiliate (debajo del Date) ===
                         html.H4("Affiliate", style={"color": "#D4AF37", "marginTop": "5px"}),
                         dcc.Dropdown(
-                            sorted(df["affiliate"].dropna().unique()),
-                            [],
-                            multi=True,
-                            id="filtro-affiliate",
+                            sorted(df["affiliate"].dropna().unique()), [],
+                            multi=True, id="filtro-affiliate",
                             style={"marginBottom": "20px"},
                         ),
-
-                        # === Filtro de Country ===
                         html.H4("Country", style={"color": "#D4AF37", "marginTop": "10px"}),
                         dcc.Dropdown(
-                            sorted(df["country"].dropna().unique()),
-                            [],
-                            multi=True,
-                            id="filtro-country",
+                            sorted(df["country"].dropna().unique()), [],
+                            multi=True, id="filtro-country",
                         ),
                     ],
                 ),
 
-                # --- Panel de contenido ---
+                # --- Panel principal ---
                 html.Div(
                     style={"width": "72%"},
                     children=[
@@ -216,6 +214,7 @@ app.layout = html.Div(
     ],
 )
 
+
 # === 🔟 Callback ===
 @app.callback(
     [
@@ -237,7 +236,6 @@ app.layout = html.Div(
 def actualizar_dashboard(start, end, affiliates, countries):
     df_filtrado = df.copy()
 
-    # === Filtrar ===
     if start and end:
         start_dt, end_dt = pd.to_datetime(start), pd.to_datetime(end)
         df_filtrado = df_filtrado[(df_filtrado["date"] >= start_dt) & (df_filtrado["date"] <= end_dt)]
@@ -246,7 +244,6 @@ def actualizar_dashboard(start, end, affiliates, countries):
     if countries:
         df_filtrado = df_filtrado[df_filtrado["country"].isin(countries)]
 
-    # === Agrupar por fecha, país, afiliado ===
     df_agregado = (
         df_filtrado.groupby(["date", "country", "affiliate"], as_index=False)
         .agg({"usd_total": "sum", "count_ftd": "sum"})
@@ -255,7 +252,6 @@ def actualizar_dashboard(start, end, affiliates, countries):
         lambda r: r["usd_total"] / r["count_ftd"] if r["count_ftd"] > 0 else 0, axis=1
     )
 
-    # === Totales ===
     total_amount = df_agregado["usd_total"].sum()
     total_ftds = df_agregado["count_ftd"].sum()
     general_ltv_total = total_amount / total_ftds if total_ftds > 0 else 0
@@ -284,7 +280,6 @@ def actualizar_dashboard(start, end, affiliates, countries):
         html.H2(f"${general_ltv_total:,.2f}", style={"color": "#FFFFFF", "fontSize": "36px"})
     ], style=card_style)
 
-    # === Gráficos ===
     df_aff = df_agregado.groupby("affiliate", as_index=False).agg({"usd_total": "sum", "count_ftd": "sum"})
     df_aff["general_ltv"] = df_aff.apply(lambda r: r["usd_total"] / r["count_ftd"] if r["count_ftd"] > 0 else 0, axis=1)
 
@@ -306,9 +301,8 @@ def actualizar_dashboard(start, end, affiliates, countries):
 
     for fig in [fig_affiliate, fig_country, fig_bar]:
         fig.update_layout(paper_bgcolor="#0d0d0d", plot_bgcolor="#0d0d0d",
-                          font_color="#f2f2f2", title_font_color="#D4AF37")
+                          font_color="#f2f2f2", title_font_color="#D4AF37"])
 
-    # === Tabla ===
     tabla = df_agregado.copy()
     tabla["date"] = tabla["date"].dt.strftime("%Y-%m-%d")
     tabla_data = tabla.round(2).to_dict("records")
@@ -316,6 +310,47 @@ def actualizar_dashboard(start, end, affiliates, countries):
     return indicador_ftds, indicador_amount, indicador_ltv, fig_affiliate, fig_country, fig_bar, tabla_data
 
 
+# === 1️⃣1️⃣ Captura PDF/PPT desde iframe ===
+app.index_string = '''
+<!DOCTYPE html>
+<html>
+<head>
+  {%metas%}
+  <title>OBL Digital — Dashboard GENERAL LTV</title>
+  {%favicon%}
+  {%css%}
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+  {%app_entry%}
+  <footer>
+    {%config%}
+    {%scripts%}
+    {%renderer%}
+  </footer>
+
+  <script>
+    window.addEventListener("message", async (event) => {
+      if (!event.data || event.data.action !== "capture_dashboard") return;
+
+      try {
+        const canvas = await html2canvas(document.body, { useCORS: true, scale: 2, backgroundColor: "#0d0d0d" });
+        const imgData = canvas.toDataURL("image/png");
+
+        window.parent.postMessage({
+          action: "capture_image",
+          img: imgData,
+          filetype: event.data.type
+        }, "*");
+      } catch (err) {
+        console.error("Error al capturar dashboard:", err);
+        window.parent.postMessage({ action: "capture_done" }, "*");
+      }
+    });
+  </script>
+</body>
+</html>
+'''
+
 if __name__ == "__main__":
     app.run_server(debug=True, port=8053)
-
