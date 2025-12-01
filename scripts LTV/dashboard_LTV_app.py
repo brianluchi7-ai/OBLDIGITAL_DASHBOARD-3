@@ -301,7 +301,7 @@ def actualizar_dashboard(start, end, affiliates, countries):
 
     for fig in [fig_affiliate, fig_country, fig_bar]:
         fig.update_layout(paper_bgcolor="#0d0d0d", plot_bgcolor="#0d0d0d",
-                          font_color="#f2f2f2", title_font_color="#D4AF37"])
+                          font_color="#f2f2f2", title_font_color="#D4AF37")
 
     tabla = df_agregado.copy()
     tabla["date"] = tabla["date"].dt.strftime("%Y-%m-%d")
@@ -354,3 +354,4 @@ app.index_string = '''
 
 if __name__ == "__main__":
     app.run_server(debug=True, port=8053)
+
