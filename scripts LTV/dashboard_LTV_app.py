@@ -30,6 +30,11 @@ def cargar_datos():
 df = cargar_datos()
 df.columns = [c.strip().lower() for c in df.columns]
 
+# Si la columna "source" no existe (por compatibilidad), la creamos vacía
+if "source" not in df.columns:
+    df["source"] = None
+    print("⚠️ Columna 'source' no encontrada — creada vacía temporalmente.")
+
 # === 2️⃣ Normalizar columnas ===
 if "usd_total" not in df.columns:
     for alt in ["usd", "total_amount"]:
@@ -85,13 +90,13 @@ df["count_ftd"] = pd.to_numeric(df.get("count_ftd", 0), errors="coerce").fillna(
 df["general_ltv"] = pd.to_numeric(df.get("general_ltv", 0), errors="coerce").fillna(0.0)
 
 # === 5️⃣ Limpieza de texto ===
-for col in ["country", "affiliate"]:
+for col in ["country", "affiliate", "source"]:
     if col in df.columns:
         df[col] = df[col].astype(str).str.strip().str.title()
         df[col].replace({"Nan": None, "None": None, "": None}, inplace=True)
 
 # === 6️⃣ Eliminar duplicados exactos ===
-df = df.drop_duplicates(subset=["date", "country", "affiliate"], keep="last")
+df = df.drop_duplicates(subset=["date", "country", "affiliate", "source"], keep="last")
 
 fecha_min, fecha_max = df["date"].min(), df["date"].max()
 
@@ -105,7 +110,7 @@ def formato_km(valor):
         return f"{valor:.0f}"
 
 
-# === 8️⃣ Inicializar app con librerías externas ===
+# === 8️⃣ Inicializar app ===
 external_scripts = [
     "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
     "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
@@ -161,6 +166,12 @@ app.layout = html.Div(
                             multi=True, id="filtro-affiliate",
                             style={"marginBottom": "20px"},
                         ),
+                        html.H4("Source", style={"color": "#D4AF37", "marginTop": "10px"}),
+                        dcc.Dropdown(
+                            sorted(df["source"].dropna().unique()), [],
+                            multi=True, id="filtro-source",
+                            style={"marginBottom": "20px"},
+                        ),
                         html.H4("Country", style={"color": "#D4AF37", "marginTop": "10px"}),
                         dcc.Dropdown(
                             sorted(df["country"].dropna().unique()), [],
@@ -198,6 +209,7 @@ app.layout = html.Div(
                                 {"name": "DATE", "id": "date"},
                                 {"name": "COUNTRY", "id": "country"},
                                 {"name": "AFFILIATE", "id": "affiliate"},
+                                {"name": "SOURCE", "id": "source"},
                                 {"name": "TOTAL AMOUNT", "id": "usd_total"},
                                 {"name": "FTD'S", "id": "count_ftd"},
                                 {"name": "GENERAL LTV", "id": "general_ltv"},
@@ -230,10 +242,11 @@ app.layout = html.Div(
         Input("filtro-fecha", "start_date"),
         Input("filtro-fecha", "end_date"),
         Input("filtro-affiliate", "value"),
+        Input("filtro-source", "value"),
         Input("filtro-country", "value"),
     ],
 )
-def actualizar_dashboard(start, end, affiliates, countries):
+def actualizar_dashboard(start, end, affiliates, sources, countries):
     df_filtrado = df.copy()
 
     if start and end:
@@ -241,11 +254,13 @@ def actualizar_dashboard(start, end, affiliates, countries):
         df_filtrado = df_filtrado[(df_filtrado["date"] >= start_dt) & (df_filtrado["date"] <= end_dt)]
     if affiliates:
         df_filtrado = df_filtrado[df_filtrado["affiliate"].isin(affiliates)]
+    if sources:
+        df_filtrado = df_filtrado[df_filtrado["source"].isin(sources)]
     if countries:
         df_filtrado = df_filtrado[df_filtrado["country"].isin(countries)]
 
     df_agregado = (
-        df_filtrado.groupby(["date", "country", "affiliate"], as_index=False)
+        df_filtrado.groupby(["date", "country", "affiliate", "source"], as_index=False)
         .agg({"usd_total": "sum", "count_ftd": "sum"})
     )
     df_agregado["general_ltv"] = df_agregado.apply(
@@ -310,13 +325,13 @@ def actualizar_dashboard(start, end, affiliates, countries):
     return indicador_ftds, indicador_amount, indicador_ltv, fig_affiliate, fig_country, fig_bar, tabla_data
 
 
-# === 1️⃣1️⃣ Captura PDF/PPT desde iframe ===
+# === 9️⃣ Captura PDF/PPT desde iframe ===
 app.index_string = '''
 <!DOCTYPE html>
 <html>
 <head>
   {%metas%}
-  <title>OBL Digital — Dashboard GENERAL LTV</title>
+  <title>OBL Digital — Dashboard FTD</title>
   {%favicon%}
   {%css%}
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -352,6 +367,7 @@ app.index_string = '''
 </html>
 '''
 
+
+
 if __name__ == "__main__":
     app.run_server(debug=True, port=8053)
-
