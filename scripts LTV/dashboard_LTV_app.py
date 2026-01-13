@@ -6,7 +6,7 @@ import plotly.express as px
 from conexion_mysql import crear_conexion
 
 # ======================================================
-# === OBL DIGITAL DASHBOARD — GENERAL LTV (Dark Gold) ===
+# === OBL DIGITAL DASHBOARD — GENERAL LTV (FINAL) =======
 # ======================================================
 
 # ------------------------------------------------------
@@ -64,7 +64,7 @@ def limpiar_usd(valor):
 
 
 # ------------------------------------------------------
-# 🔹 CARGA Y PREPARACIÓN
+# 🔹 PREPARACIÓN DE DATA
 # ------------------------------------------------------
 df_ftd, df_rtn = cargar_datos()
 
@@ -94,10 +94,7 @@ fecha_max = max(df_ftd["date"].max(), df_rtn["date"].max())
 # 🔹 FORMATO
 # ------------------------------------------------------
 def formato_km(valor):
-    try:
-        return f"{valor:,.2f}"
-    except:
-        return "0.00"
+    return f"{valor:,.2f}"
 
 
 # ------------------------------------------------------
@@ -109,7 +106,7 @@ app.title = "OBL Digital — GENERAL LTV Dashboard"
 
 
 # ------------------------------------------------------
-# 🔹 LAYOUT (SIN CAMBIOS)
+# 🔹 LAYOUT (SIN CAMBIOS VISUALES)
 # ------------------------------------------------------
 app.layout = html.Div(
     style={"backgroundColor": "#0d0d0d", "padding": "20px"},
@@ -194,7 +191,7 @@ app.layout = html.Div(
 
 
 # ------------------------------------------------------
-# 🔹 CALLBACK (FIX DEFINITIVO)
+# 🔹 CALLBACK FINAL
 # ------------------------------------------------------
 @app.callback(
     [
@@ -219,14 +216,14 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
     ftd = df_ftd.copy()
     rtn = df_rtn.copy()
 
-    # ================== FILTRO FECHA REAL ==================
+    # -------- FILTRO FECHA REAL --------
     if start and end:
-        start = pd.to_datetime(start).normalize()
-        end = pd.to_datetime(end).normalize()
+        start = pd.to_datetime(start)
+        end = pd.to_datetime(end)
         ftd = ftd[(ftd["date"] >= start) & (ftd["date"] <= end)]
         rtn = rtn[(rtn["date"] >= start) & (rtn["date"] <= end)]
 
-    # ================== FILTROS TEXTO ==================
+    # -------- FILTROS TEXTO --------
     for col, vals in {
         "affiliate": affiliates,
         "source": sources,
@@ -236,7 +233,12 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
             ftd = ftd[ftd[col].isin(vals)]
             rtn = rtn[rtn[col].isin(vals)]
 
-    # ================== GENERAL LTV MENSUAL ==================
+    # -------- KPI GENERALES --------
+    total_ftds = ftd.shape[0]
+    total_amount = ftd["usd_total"].sum() + rtn["usd_total"].sum()
+    general_ltv_total = total_amount / total_ftds if total_ftds > 0 else 0
+
+    # -------- AGREGADO MENSUAL --------
     ftd["month"] = ftd["date"].dt.to_period("M")
     rtn["month"] = rtn["date"].dt.to_period("M")
 
@@ -254,24 +256,24 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
     )
 
     df_ltv = pd.merge(
-        ftd_m, rtn_m,
+        ftd_m,
+        rtn_m,
         on=["month", "country", "affiliate", "source"],
-        how="left"
+        how="outer"
     )
 
-    df_ltv["usd_rtn"] = df_ltv["usd_rtn"].fillna(0)
-    df_ltv["usd_total"] = df_ltv["usd_ftd"] + df_ltv["usd_rtn"]
-    df_ltv["general_ltv"] = df_ltv["usd_total"] / df_ltv["count_ftd"]
+    df_ltv[["usd_ftd", "usd_rtn", "count_ftd"]] = df_ltv[["usd_ftd", "usd_rtn", "count_ftd"]].fillna(0)
 
-    # 📅 FECHA FIN DE MES (SOLO VISUAL)
+    df_ltv["usd_total"] = df_ltv["usd_ftd"] + df_ltv["usd_rtn"]
+    df_ltv["general_ltv"] = df_ltv.apply(
+        lambda r: r["usd_total"] / r["count_ftd"] if r["count_ftd"] > 0 else 0,
+        axis=1
+    )
+
     df_ltv["date"] = df_ltv["month"].dt.to_timestamp("M")
     df_ltv.drop(columns=["month"], inplace=True)
 
-    # ================== KPIs ==================
-    total_amount = df_ltv["usd_total"].sum()
-    total_ftds = df_ltv["count_ftd"].sum()
-    general_ltv_total = total_amount / total_ftds if total_ftds > 0 else 0
-
+    # -------- CARDS --------
     card_style = {
         "backgroundColor": "#1a1a1a",
         "borderRadius": "10px",
@@ -296,38 +298,29 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
         html.H2(f"${general_ltv_total:,.2f}", style={"color": "#FFF"})
     ], style=card_style)
 
-    # ================== GRÁFICAS ==================
+    # -------- GRÁFICAS --------
     df_aff = df_ltv.groupby("affiliate", as_index=False).agg(
         {"usd_total": "sum", "count_ftd": "sum"}
     )
     df_aff["general_ltv"] = df_aff["usd_total"] / df_aff["count_ftd"]
 
-    fig_aff = px.pie(
-        df_aff, names="affiliate", values="general_ltv",
-        title="GENERAL LTV by Affiliate",
-        color_discrete_sequence=px.colors.sequential.YlOrBr
-    )
+    fig_aff = px.pie(df_aff, names="affiliate", values="general_ltv",
+                     title="GENERAL LTV by Affiliate",
+                     color_discrete_sequence=px.colors.sequential.YlOrBr)
 
     df_cty = df_ltv.groupby("country", as_index=False).agg(
         {"usd_total": "sum", "count_ftd": "sum"}
     )
     df_cty["general_ltv"] = df_cty["usd_total"] / df_cty["count_ftd"]
 
-    fig_cty = px.pie(
-        df_cty, names="country", values="general_ltv",
-        title="GENERAL LTV by Country",
-        color_discrete_sequence=px.colors.sequential.YlOrBr
-    )
+    fig_cty = px.pie(df_cty, names="country", values="general_ltv",
+                     title="GENERAL LTV by Country",
+                     color_discrete_sequence=px.colors.sequential.YlOrBr)
 
-    fig_bar = px.bar(
-        df_ltv,
-        x="country",
-        y="general_ltv",
-        color="affiliate",
-        barmode="group",
-        title="GENERAL LTV by Country and Affiliate",
-        color_discrete_sequence=px.colors.sequential.YlOrBr
-    )
+    fig_bar = px.bar(df_ltv, x="country", y="general_ltv", color="affiliate",
+                     barmode="group",
+                     title="GENERAL LTV by Country and Affiliate",
+                     color_discrete_sequence=px.colors.sequential.YlOrBr)
 
     for fig in [fig_aff, fig_cty, fig_bar]:
         fig.update_layout(
@@ -396,6 +389,7 @@ app.index_string = '''
 
 if __name__ == "__main__":
     app.run_server(debug=True, port=8053)
+
 
 
 
