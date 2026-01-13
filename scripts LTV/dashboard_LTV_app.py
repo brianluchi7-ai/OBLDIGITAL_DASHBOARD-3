@@ -113,7 +113,9 @@ app.layout = html.Div(
         "backgroundColor": "#0d0d0d",
         "color": "#000000",
         "fontFamily": "Arial",
-        "padding": "20px",
+        "padding": "20px"
+    },
+    children=[
 
         html.H1("📊 DASHBOARD GENERAL LTV", style={
             "textAlign": "center",
@@ -122,66 +124,111 @@ app.layout = html.Div(
             "fontWeight": "bold"
         }),
 
-        html.Div(style={"display": "flex", "justifyContent": "space-between"}, children=[
+        html.Div(
+            style={"display": "flex", "justifyContent": "space-between"},
+            children=[
 
-            # === FILTROS ===
-            html.Div(style={
-                "width": "25%",
-                "backgroundColor": "#1a1a1a",
-                "padding": "20px",
-                "borderRadius": "12px",
-                "boxShadow": "0 0 15px rgba(212,175,55,0.3)",
-                "textAlign": "center",
-            }, children=[
-                html.H4("Date", style={"color": "#D4AF37"}),
-                dcc.DatePickerRange(
-                    id="filtro-fecha",
-                    start_date=fecha_min,
-                    end_date=fecha_max,
-                    display_format="YYYY-MM-DD",
-                ),
-                html.H4("Affiliate", style={"color": "#D4AF37", "marginTop": "10px"}),
-                dcc.Dropdown(sorted(df["affiliate"].dropna().unique()), multi=True, id="filtro-affiliate"),
-                html.H4("Source", style={"color": "#D4AF37", "marginTop": "10px"}),
-                dcc.Dropdown(sorted(df["source"].dropna().unique()), multi=True, id="filtro-source"),
-                html.H4("Country", style={"color": "#D4AF37", "marginTop": "10px"}),
-                dcc.Dropdown(sorted(df["country"].dropna().unique()), multi=True, id="filtro-country"),
-            ]),
+                # === FILTROS ===
+                html.Div(
+                    style={
+                        "width": "25%",
+                        "backgroundColor": "#1a1a1a",
+                        "padding": "20px",
+                        "borderRadius": "12px",
+                        "boxShadow": "0 0 15px rgba(212,175,55,0.3)",
+                        "textAlign": "center",
+                    },
+                    children=[
+                        html.H4("Date", style={"color": "#D4AF37"}),
+                        dcc.DatePickerRange(
+                            id="filtro-fecha",
+                            start_date=fecha_min,
+                            end_date=fecha_max,
+                            display_format="YYYY-MM-DD",
+                        ),
 
-            # === PANEL PRINCIPAL ===
-            html.Div(style={"width": "72%"}, children=[
-                html.Div(style={"display": "flex", "justifyContent": "space-around"}, children=[
-                    html.Div(id="indicador-ftds", style={"width": "30%"}),
-                    html.Div(id="indicador-amount", style={"width": "30%"}),
-                    html.Div(id="indicador-ltv", style={"width": "30%"}),
-                ]),
-                html.Br(),
-                html.Div(style={"display": "flex", "flexWrap": "wrap", "gap": "20px"}, children=[
-                    dcc.Graph(id="grafico-ltv-affiliate", style={"width": "48%", "height": "340px"}),
-                    dcc.Graph(id="grafico-ltv-country", style={"width": "48%", "height": "340px"}),
-                    dcc.Graph(id="grafico-bar-country-aff", style={"width": "100%", "height": "360px"}),
-                ]),
-                html.Br(),
-                html.H4("📋 Detalle General LTV", style={"color": "#D4AF37"}),
-                dash_table.DataTable(
-                    id="tabla-detalle",
-                    columns=[
-                        {"name": "DATE", "id": "date"},
-                        {"name": "COUNTRY", "id": "country"},
-                        {"name": "AFFILIATE", "id": "affiliate"},
-                        {"name": "SOURCE", "id": "source"},
-                        {"name": "TOTAL AMOUNT", "id": "usd_total"},
-                        {"name": "FTD'S", "id": "count_ftd"},
-                        {"name": "GENERAL LTV", "id": "general_ltv"},
-                    ],
-                    page_size=15,
-                    style_cell={"textAlign": "center", "color": "#f2f2f2", "backgroundColor": "#1a1a1a"},
-                    style_header={"backgroundColor": "#D4AF37", "color": "#000", "fontWeight": "bold"},
+                        html.H4("Affiliate", style={"color": "#D4AF37", "marginTop": "10px"}),
+                        dcc.Dropdown(
+                            sorted(df["affiliate"].dropna().unique()),
+                            multi=True,
+                            id="filtro-affiliate"
+                        ),
+
+                        html.H4("Source", style={"color": "#D4AF37", "marginTop": "10px"}),
+                        dcc.Dropdown(
+                            sorted(df["source"].dropna().unique()),
+                            multi=True,
+                            id="filtro-source"
+                        ),
+
+                        html.H4("Country", style={"color": "#D4AF37", "marginTop": "10px"}),
+                        dcc.Dropdown(
+                            sorted(df["country"].dropna().unique()),
+                            multi=True,
+                            id="filtro-country"
+                        ),
+                    ]
                 ),
-            ])
-        ])
+
+                # === PANEL PRINCIPAL ===
+                html.Div(
+                    style={"width": "72%"},
+                    children=[
+
+                        html.Div(
+                            style={"display": "flex", "justifyContent": "space-around"},
+                            children=[
+                                html.Div(id="indicador-ftds", style={"width": "30%"}),
+                                html.Div(id="indicador-amount", style={"width": "30%"}),
+                                html.Div(id="indicador-ltv", style={"width": "30%"}),
+                            ]
+                        ),
+
+                        html.Br(),
+
+                        html.Div(
+                            style={"display": "flex", "flexWrap": "wrap", "gap": "20px"},
+                            children=[
+                                dcc.Graph(id="grafico-ltv-affiliate", style={"width": "48%", "height": "340px"}),
+                                dcc.Graph(id="grafico-ltv-country", style={"width": "48%", "height": "340px"}),
+                                dcc.Graph(id="grafico-bar-country-aff", style={"width": "100%", "height": "360px"}),
+                            ]
+                        ),
+
+                        html.Br(),
+
+                        html.H4("📋 Detalle General LTV", style={"color": "#D4AF37"}),
+
+                        dash_table.DataTable(
+                            id="tabla-detalle",
+                            columns=[
+                                {"name": "DATE", "id": "date"},
+                                {"name": "COUNTRY", "id": "country"},
+                                {"name": "AFFILIATE", "id": "affiliate"},
+                                {"name": "SOURCE", "id": "source"},
+                                {"name": "TOTAL AMOUNT", "id": "usd_total"},
+                                {"name": "FTD'S", "id": "count_ftd"},
+                                {"name": "GENERAL LTV", "id": "general_ltv"},
+                            ],
+                            page_size=15,
+                            style_cell={
+                                "textAlign": "center",
+                                "color": "#f2f2f2",
+                                "backgroundColor": "#1a1a1a"
+                            },
+                            style_header={
+                                "backgroundColor": "#D4AF37",
+                                "color": "#000",
+                                "fontWeight": "bold"
+                            },
+                        ),
+                    ]
+                )
+            ]
+        )
     ]
 )
+
 
 
 # === 🔟 CALLBACK ===
@@ -376,6 +423,7 @@ app.index_string = '''
 
 if __name__ == "__main__":
     app.run_server(debug=True, port=8053)
+
 
 
 
