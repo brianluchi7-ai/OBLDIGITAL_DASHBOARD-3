@@ -109,8 +109,11 @@ app.title = "OBL Digital — GENERAL LTV Dashboard"
 
 # === 9️⃣ Layout ===
 app.layout = html.Div(
-    style={"backgroundColor": "#0d0d0d", "padding": "20px"},
-    children=[
+    style={
+        "backgroundColor": "#0d0d0d",
+        "color": "#000000",
+        "fontFamily": "Arial",
+        "padding": "20px",
 
         html.H1("📊 DASHBOARD GENERAL LTV", style={
             "textAlign": "center",
@@ -373,6 +376,7 @@ app.index_string = '''
 
 if __name__ == "__main__":
     app.run_server(debug=True, port=8053)
+
 
 
 
