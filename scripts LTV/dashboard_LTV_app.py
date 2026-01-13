@@ -239,9 +239,14 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
     df_month["date"] = df_month["month"].dt.to_timestamp("M")
     df_month.drop(columns=["month"], inplace=True)
 
-    # === KPIs ===
-    total_amount = df_month["usd_total"].sum()
-    total_ftds = df_month["count_ftd"].sum()
+    # === KPIs (BASE REAL - MISMA LÓGICA QUE COMISIONES) ===
+
+    # FTDs reales (conteo directo del dataframe base)
+    total_ftds = (df_filtrado["deposit_type"].str.upper() == "FTD").sum()
+    
+    # Total USD real (FTD + RTN)
+    total_amount = df_filtrado["usd_total"].sum()
+    
     general_ltv_total = total_amount / total_ftds if total_ftds > 0 else 0
 
     card_style = {
@@ -368,6 +373,7 @@ app.index_string = '''
 
 if __name__ == "__main__":
     app.run_server(debug=True, port=8053)
+
 
 
 
