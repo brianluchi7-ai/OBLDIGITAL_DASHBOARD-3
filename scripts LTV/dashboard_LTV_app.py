@@ -10,38 +10,33 @@ from conexion_mysql import crear_conexion
 # ======================================================
 
 # ------------------------------------------------------
-# 🔹 CARGA DE DATOS (NO asumir columnas)
+# 🔹 CARGA DE DATOS
 # ------------------------------------------------------
 def cargar_datos():
     try:
         conexion = crear_conexion()
-
         df_ftd = pd.read_sql("SELECT * FROM FTD_MASTER_CLEAN", conexion)
         df_rtn = pd.read_sql("SELECT * FROM RTN_MASTER_CLEAN", conexion)
-
         conexion.close()
         print("✅ Conectado correctamente a Railway MySQL")
         return df_ftd, df_rtn
-
     except Exception as e:
         print(f"⚠️ Error SQL: {e}")
         return pd.DataFrame(), pd.DataFrame()
 
 
 # ------------------------------------------------------
-# 🔹 NORMALIZAR COLUMNAS (CLAVE)
+# 🔹 NORMALIZAR COLUMNAS
 # ------------------------------------------------------
 def normalizar_columnas(df):
     df.columns = [c.lower().strip() for c in df.columns]
 
-    # Fecha
     if "date" not in df.columns:
         for alt in ["created_at", "deposit_date", "day", "fecha"]:
             if alt in df.columns:
                 df.rename(columns={alt: "date"}, inplace=True)
                 break
 
-    # USD
     if "usd_total" not in df.columns:
         for alt in ["usd", "amount", "amount_usd", "total_usd", "deposit_usd"]:
             if alt in df.columns:
@@ -108,11 +103,7 @@ def formato_km(valor):
 # ------------------------------------------------------
 # 🔹 DASH APP
 # ------------------------------------------------------
-external_scripts = [
-    "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"
-]
-
-app = dash.Dash(__name__, external_scripts=external_scripts)
+app = dash.Dash(__name__)
 server = app.server
 app.title = "OBL Digital — GENERAL LTV Dashboard"
 
@@ -203,7 +194,7 @@ app.layout = html.Div(
 
 
 # ------------------------------------------------------
-# 🔹 CALLBACK
+# 🔹 CALLBACK (FIX DEFINITIVO)
 # ------------------------------------------------------
 @app.callback(
     [
@@ -228,11 +219,14 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
     ftd = df_ftd.copy()
     rtn = df_rtn.copy()
 
+    # ================== FILTRO FECHA REAL ==================
     if start and end:
-        start, end = pd.to_datetime(start), pd.to_datetime(end)
+        start = pd.to_datetime(start).normalize()
+        end = pd.to_datetime(end).normalize()
         ftd = ftd[(ftd["date"] >= start) & (ftd["date"] <= end)]
         rtn = rtn[(rtn["date"] >= start) & (rtn["date"] <= end)]
 
+    # ================== FILTROS TEXTO ==================
     for col, vals in {
         "affiliate": affiliates,
         "source": sources,
@@ -269,6 +263,7 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
     df_ltv["usd_total"] = df_ltv["usd_ftd"] + df_ltv["usd_rtn"]
     df_ltv["general_ltv"] = df_ltv["usd_total"] / df_ltv["count_ftd"]
 
+    # 📅 FECHA FIN DE MES (SOLO VISUAL)
     df_ltv["date"] = df_ltv["month"].dt.to_timestamp("M")
     df_ltv.drop(columns=["month"], inplace=True)
 
@@ -354,7 +349,7 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
         fig_bar,
         tabla.round(2).to_dict("records")
     )
-
+    
 # === 9️⃣ Captura PDF/PPT desde iframe ===
 app.index_string = '''
 <!DOCTYPE html>
@@ -401,6 +396,7 @@ app.index_string = '''
 
 if __name__ == "__main__":
     app.run_server(debug=True, port=8053)
+
 
 
 
