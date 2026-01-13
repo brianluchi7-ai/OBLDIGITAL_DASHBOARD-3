@@ -17,12 +17,12 @@ def cargar_datos():
         conexion = crear_conexion()
 
         df_ftd = pd.read_sql(
-            "SELECT date, country, affiliate, source, usd_total FROM FTD_MASTER_CLEAN",
+            "SELECT date, country, affiliate, source, usd FROM FTD_MASTER_CLEAN",
             conexion
         )
 
         df_rtn = pd.read_sql(
-            "SELECT date, country, affiliate, source, usd_total FROM RTN_MASTER_CLEAN",
+            "SELECT date, country, affiliate, source, usd FROM RTN_MASTER_CLEAN",
             conexion
         )
 
@@ -385,6 +385,7 @@ app.index_string = '''
 
 if __name__ == "__main__":
     app.run_server(debug=True, port=8053)
+
 
 
 
