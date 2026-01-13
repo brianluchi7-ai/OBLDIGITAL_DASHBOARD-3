@@ -10,28 +10,45 @@ from conexion_mysql import crear_conexion
 # ======================================================
 
 # ------------------------------------------------------
-# 🔹 CARGA DE DATOS (FTD + RTN)
+# 🔹 CARGA DE DATOS (NO asumir columnas)
 # ------------------------------------------------------
 def cargar_datos():
     try:
         conexion = crear_conexion()
 
-        df_ftd = pd.read_sql(
-            "SELECT date, country, affiliate, source, usd FROM FTD_MASTER_CLEAN",
-            conexion
-        )
-
-        df_rtn = pd.read_sql(
-            "SELECT date, country, affiliate, source, usd FROM RTN_MASTER_CLEAN",
-            conexion
-        )
+        df_ftd = pd.read_sql("SELECT * FROM FTD_MASTER_CLEAN", conexion)
+        df_rtn = pd.read_sql("SELECT * FROM RTN_MASTER_CLEAN", conexion)
 
         conexion.close()
+        print("✅ Conectado correctamente a Railway MySQL")
         return df_ftd, df_rtn
 
     except Exception as e:
         print(f"⚠️ Error SQL: {e}")
         return pd.DataFrame(), pd.DataFrame()
+
+
+# ------------------------------------------------------
+# 🔹 NORMALIZAR COLUMNAS (CLAVE)
+# ------------------------------------------------------
+def normalizar_columnas(df):
+    df.columns = [c.lower().strip() for c in df.columns]
+
+    # Fecha
+    if "date" not in df.columns:
+        for alt in ["created_at", "deposit_date", "day", "fecha"]:
+            if alt in df.columns:
+                df.rename(columns={alt: "date"}, inplace=True)
+                break
+
+    # USD
+    if "usd_total" not in df.columns:
+        for alt in ["usd", "amount", "amount_usd", "total_usd", "deposit_usd"]:
+            if alt in df.columns:
+                df.rename(columns={alt: "usd_total"}, inplace=True)
+                break
+
+    return df
 
 
 # ------------------------------------------------------
@@ -52,19 +69,27 @@ def limpiar_usd(valor):
 
 
 # ------------------------------------------------------
-# 🔹 CARGA Y NORMALIZACIÓN
+# 🔹 CARGA Y PREPARACIÓN
 # ------------------------------------------------------
 df_ftd, df_rtn = cargar_datos()
 
+df_ftd = normalizar_columnas(df_ftd)
+df_rtn = normalizar_columnas(df_rtn)
+
 for df_x in [df_ftd, df_rtn]:
-    df_x.columns = [c.lower().strip() for c in df_x.columns]
-    df_x["date"] = pd.to_datetime(df_x["date"], errors="coerce").dt.tz_localize(None)
-    df_x = df_x[df_x["date"].notna()]
+    if df_x.empty:
+        continue
+
+    df_x["date"] = pd.to_datetime(df_x["date"], errors="coerce")
+    df_x.dropna(subset=["date"], inplace=True)
+    df_x["date"] = df_x["date"].dt.tz_localize(None)
+
     df_x["usd_total"] = df_x["usd_total"].apply(limpiar_usd)
 
     for col in ["country", "affiliate", "source"]:
-        df_x[col] = df_x[col].astype(str).str.strip().str.title()
-        df_x[col].replace({"Nan": None, "None": None, "": None}, inplace=True)
+        if col in df_x.columns:
+            df_x[col] = df_x[col].astype(str).str.strip().str.title()
+            df_x[col].replace({"Nan": None, "None": None, "": None}, inplace=True)
 
 fecha_min = min(df_ftd["date"].min(), df_rtn["date"].min())
 fecha_max = max(df_ftd["date"].max(), df_rtn["date"].max())
@@ -84,7 +109,7 @@ def formato_km(valor):
 # 🔹 DASH APP
 # ------------------------------------------------------
 external_scripts = [
-    "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"
 ]
 
 app = dash.Dash(__name__, external_scripts=external_scripts)
@@ -93,7 +118,7 @@ app.title = "OBL Digital — GENERAL LTV Dashboard"
 
 
 # ------------------------------------------------------
-# 🔹 LAYOUT
+# 🔹 LAYOUT (SIN CAMBIOS)
 # ------------------------------------------------------
 app.layout = html.Div(
     style={"backgroundColor": "#0d0d0d", "padding": "20px"},
@@ -125,23 +150,14 @@ app.layout = html.Div(
                     display_format="YYYY-MM-DD",
                 ),
                 html.H4("Affiliate", style={"color": "#D4AF37", "marginTop": "10px"}),
-                dcc.Dropdown(
-                    sorted(df_ftd["affiliate"].dropna().unique()),
-                    multi=True,
-                    id="filtro-affiliate"
-                ),
+                dcc.Dropdown(sorted(df_ftd["affiliate"].dropna().unique()),
+                             multi=True, id="filtro-affiliate"),
                 html.H4("Source", style={"color": "#D4AF37", "marginTop": "10px"}),
-                dcc.Dropdown(
-                    sorted(df_ftd["source"].dropna().unique()),
-                    multi=True,
-                    id="filtro-source"
-                ),
+                dcc.Dropdown(sorted(df_ftd["source"].dropna().unique()),
+                             multi=True, id="filtro-source"),
                 html.H4("Country", style={"color": "#D4AF37", "marginTop": "10px"}),
-                dcc.Dropdown(
-                    sorted(df_ftd["country"].dropna().unique()),
-                    multi=True,
-                    id="filtro-country"
-                ),
+                dcc.Dropdown(sorted(df_ftd["country"].dropna().unique()),
+                             multi=True, id="filtro-country"),
             ]),
 
             # ================== PANEL ==================
@@ -385,6 +401,7 @@ app.index_string = '''
 
 if __name__ == "__main__":
     app.run_server(debug=True, port=8053)
+
 
 
 
