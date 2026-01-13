@@ -14,38 +14,38 @@ def cargar_datos():
     try:
         conexion = crear_conexion()
         if conexion:
-            print("✅ Leyendo GENERAL_LTV_CLEAN desde Railway MySQL...")
-            query = "SELECT * FROM GENERAL_LTV_CLEAN"
+            print("✅ Leyendo CMN_MASTER_MEX_CLEAN desde Railway MySQL...")
+            query = "SELECT * FROM CMN_MASTER_MEX_CLEAN"
             df = pd.read_sql(query, conexion)
             conexion.close()
             return df
     except Exception as e:
         print(f"⚠️ Error conectando a SQL, leyendo CSV local: {e}")
 
-    print("📁 Leyendo GENERAL_LTV_preview.csv (local)...")
-    return pd.read_csv("GENERAL_LTV_preview.csv", dtype=str)
+    print("📁 Leyendo CMN_MASTER_MEX_CLEAN_preview.csv (local)...")
+    return pd.read_csv("CMN_MASTER_MEX_CLEAN_preview.csv", dtype=str)
 
 
 # === 1️⃣ Cargar datos ===
 df = cargar_datos()
 df.columns = [c.strip().lower() for c in df.columns]
 
-# Si la columna "source" no existe (por compatibilidad), la creamos vacía
+# === 2️⃣ Normalizar columnas esperadas ===
 if "source" not in df.columns:
     df["source"] = None
-    print("⚠️ Columna 'source' no encontrada — creada vacía temporalmente.")
 
-# === 2️⃣ Normalizar columnas ===
+# Normalizar USD
 if "usd_total" not in df.columns:
-    for alt in ["usd", "total_amount"]:
+    for alt in ["usd", "total_amount", "amount_usd"]:
         if alt in df.columns:
             df.rename(columns={alt: "usd_total"}, inplace=True)
             break
 
-if "count_ftd" not in df.columns:
-    for alt in ["ftd", "ftds", "count"]:
+# Normalizar tipo de depósito
+if "deposit_type" not in df.columns:
+    for alt in ["type", "deposit", "deposit_kind"]:
         if alt in df.columns:
-            df.rename(columns={alt: "count_ftd"}, inplace=True)
+            df.rename(columns={alt: "deposit_type"}, inplace=True)
             break
 
 # === 3️⃣ Normalizar fechas ===
@@ -54,60 +54,45 @@ def convertir_fecha(valor):
         s = str(valor).strip()
         if "/" in s:
             return pd.to_datetime(s, format="%d/%m/%Y", errors="coerce")
-        elif "-" in s:
-            return pd.to_datetime(s.split(" ")[0], errors="coerce")
-    except Exception:
+        return pd.to_datetime(s.split(" ")[0], errors="coerce")
+    except:
         return pd.NaT
-    return pd.NaT
 
-df["date"] = df["date"].astype(str).str.strip().apply(convertir_fecha)
+df["date"] = df["date"].astype(str).apply(convertir_fecha)
 df = df[df["date"].notna()]
-df["date"] = pd.to_datetime(df["date"], utc=False).dt.tz_localize(None)
+df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
 
 # === 4️⃣ Limpieza de montos ===
 def limpiar_usd(valor):
     if pd.isna(valor):
         return 0.0
-    s = str(valor).strip()
-    s = re.sub(r"[^\d,.\-]", "", s)
+    s = re.sub(r"[^\d,.\-]", "", str(valor))
     if "." in s and "," in s:
-        if s.rfind(",") > s.rfind("."):
-            s = s.replace(".", "").replace(",", ".")
-        else:
-            s = s.replace(",", "")
-    elif "," in s and "." not in s:
-        partes = s.split(",")
-        s = s.replace(",", ".") if len(partes[-1]) == 2 else s.replace(",", "")
-    elif s.count(".") > 1:
-        s = s.replace(".", "")
+        s = s.replace(".", "").replace(",", ".") if s.rfind(",") > s.rfind(".") else s.replace(",", "")
+    elif "," in s:
+        s = s.replace(",", ".")
     try:
         return float(s)
     except:
         return 0.0
 
 df["usd_total"] = df["usd_total"].apply(limpiar_usd)
-df["count_ftd"] = pd.to_numeric(df.get("count_ftd", 0), errors="coerce").fillna(0).astype(float)
-df["general_ltv"] = pd.to_numeric(df.get("general_ltv", 0), errors="coerce").fillna(0.0)
 
 # === 5️⃣ Limpieza de texto ===
-for col in ["country", "affiliate", "source"]:
+for col in ["country", "affiliate", "source", "deposit_type"]:
     if col in df.columns:
         df[col] = df[col].astype(str).str.strip().str.title()
         df[col].replace({"Nan": None, "None": None, "": None}, inplace=True)
 
-# === 6️⃣ Eliminar duplicados exactos ===
-df = df.drop_duplicates(subset=["date", "country", "affiliate", "source"], keep="last")
-
+# === 6️⃣ Rango de fechas ===
 fecha_min, fecha_max = df["date"].min(), df["date"].max()
 
-# === 7️⃣ Formato K/M ===
+# === 7️⃣ Formato ===
 def formato_km(valor):
-    """Mostrar los montos completos con separadores de miles y dos decimales."""
     try:
         return f"{valor:,.2f}"
     except:
         return "0.00"
-
 
 
 # === 8️⃣ Inicializar app ===
@@ -124,13 +109,9 @@ app.title = "OBL Digital — GENERAL LTV Dashboard"
 
 # === 9️⃣ Layout ===
 app.layout = html.Div(
-    style={
-        "backgroundColor": "#0d0d0d",
-        "color": "#000000",
-        "fontFamily": "Arial",
-        "padding": "20px",
-    },
+    style={"backgroundColor": "#0d0d0d", "padding": "20px"},
     children=[
+
         html.H1("📊 DASHBOARD GENERAL LTV", style={
             "textAlign": "center",
             "color": "#D4AF37",
@@ -138,96 +119,69 @@ app.layout = html.Div(
             "fontWeight": "bold"
         }),
 
-        html.Div(
-            style={"display": "flex", "justifyContent": "space-between"},
-            children=[
-                # --- Panel de Filtros ---
-                html.Div(
-                    style={
-                        "width": "25%",
-                        "backgroundColor": "#1a1a1a",
-                        "padding": "20px",
-                        "borderRadius": "12px",
-                        "boxShadow": "0 0 15px rgba(212,175,55,0.3)",
-                        "textAlign": "center",
-                    },
-                    children=[
-                        html.H4("Date", style={"color": "#D4AF37"}),
-                        dcc.DatePickerRange(
-                            id="filtro-fecha",
-                            start_date=fecha_min,
-                            end_date=fecha_max,
-                            display_format="YYYY-MM-DD",
-                            style={"marginBottom": "25px"},
-                        ),
-                        html.H4("Affiliate", style={"color": "#D4AF37", "marginTop": "5px"}),
-                        dcc.Dropdown(
-                            sorted(df["affiliate"].dropna().unique()), [],
-                            multi=True, id="filtro-affiliate",
-                            style={"marginBottom": "20px"},
-                        ),
-                        html.H4("Source", style={"color": "#D4AF37", "marginTop": "10px"}),
-                        dcc.Dropdown(
-                            sorted(df["source"].dropna().unique()), [],
-                            multi=True, id="filtro-source",
-                            style={"marginBottom": "20px"},
-                        ),
-                        html.H4("Country", style={"color": "#D4AF37", "marginTop": "10px"}),
-                        dcc.Dropdown(
-                            sorted(df["country"].dropna().unique()), [],
-                            multi=True, id="filtro-country",
-                        ),
-                    ],
-                ),
+        html.Div(style={"display": "flex", "justifyContent": "space-between"}, children=[
 
-                # --- Panel principal ---
-                html.Div(
-                    style={"width": "72%"},
-                    children=[
-                        html.Div(
-                            style={"display": "flex", "justifyContent": "space-around"},
-                            children=[
-                                html.Div(id="indicador-ftds", style={"width": "30%"}),
-                                html.Div(id="indicador-amount", style={"width": "30%"}),
-                                html.Div(id="indicador-ltv", style={"width": "30%"}),
-                            ],
-                        ),
-                        html.Br(),
-                        html.Div(
-                            style={"display": "flex", "flexWrap": "wrap", "gap": "20px"},
-                            children=[
-                                dcc.Graph(id="grafico-ltv-affiliate", style={"width": "48%", "height": "340px"}),
-                                dcc.Graph(id="grafico-ltv-country", style={"width": "48%", "height": "340px"}),
-                                dcc.Graph(id="grafico-bar-country-aff", style={"width": "100%", "height": "360px"}),
-                            ],
-                        ),
-                        html.Br(),
-                        html.H4("📋 Detalle General LTV", style={"color": "#D4AF37"}),
-                        dash_table.DataTable(
-                            id="tabla-detalle",
-                            columns=[
-                                {"name": "DATE", "id": "date"},
-                                {"name": "COUNTRY", "id": "country"},
-                                {"name": "AFFILIATE", "id": "affiliate"},
-                                {"name": "SOURCE", "id": "source"},
-                                {"name": "TOTAL AMOUNT", "id": "usd_total"},
-                                {"name": "FTD'S", "id": "count_ftd"},
-                                {"name": "GENERAL LTV", "id": "general_ltv"},
-                            ],
-                            style_table={"overflowX": "auto", "backgroundColor": "#0d0d0d"},
-                            page_size=15,
-                            style_cell={"textAlign": "center", "color": "#f2f2f2", "backgroundColor": "#1a1a1a"},
-                            style_header={"backgroundColor": "#D4AF37", "color": "#000", "fontWeight": "bold"},
-                        ),
-                    ],
+            # === FILTROS ===
+            html.Div(style={
+                "width": "25%",
+                "backgroundColor": "#1a1a1a",
+                "padding": "20px",
+                "borderRadius": "12px",
+                "boxShadow": "0 0 15px rgba(212,175,55,0.3)",
+                "textAlign": "center",
+            }, children=[
+                html.H4("Date", style={"color": "#D4AF37"}),
+                dcc.DatePickerRange(
+                    id="filtro-fecha",
+                    start_date=fecha_min,
+                    end_date=fecha_max,
+                    display_format="YYYY-MM-DD",
                 ),
-            ],
-        ),
-    ],
+                html.H4("Affiliate", style={"color": "#D4AF37", "marginTop": "10px"}),
+                dcc.Dropdown(sorted(df["affiliate"].dropna().unique()), multi=True, id="filtro-affiliate"),
+                html.H4("Source", style={"color": "#D4AF37", "marginTop": "10px"}),
+                dcc.Dropdown(sorted(df["source"].dropna().unique()), multi=True, id="filtro-source"),
+                html.H4("Country", style={"color": "#D4AF37", "marginTop": "10px"}),
+                dcc.Dropdown(sorted(df["country"].dropna().unique()), multi=True, id="filtro-country"),
+            ]),
+
+            # === PANEL PRINCIPAL ===
+            html.Div(style={"width": "72%"}, children=[
+                html.Div(style={"display": "flex", "justifyContent": "space-around"}, children=[
+                    html.Div(id="indicador-ftds", style={"width": "30%"}),
+                    html.Div(id="indicador-amount", style={"width": "30%"}),
+                    html.Div(id="indicador-ltv", style={"width": "30%"}),
+                ]),
+                html.Br(),
+                html.Div(style={"display": "flex", "flexWrap": "wrap", "gap": "20px"}, children=[
+                    dcc.Graph(id="grafico-ltv-affiliate", style={"width": "48%", "height": "340px"}),
+                    dcc.Graph(id="grafico-ltv-country", style={"width": "48%", "height": "340px"}),
+                    dcc.Graph(id="grafico-bar-country-aff", style={"width": "100%", "height": "360px"}),
+                ]),
+                html.Br(),
+                html.H4("📋 Detalle General LTV", style={"color": "#D4AF37"}),
+                dash_table.DataTable(
+                    id="tabla-detalle",
+                    columns=[
+                        {"name": "DATE", "id": "date"},
+                        {"name": "COUNTRY", "id": "country"},
+                        {"name": "AFFILIATE", "id": "affiliate"},
+                        {"name": "SOURCE", "id": "source"},
+                        {"name": "TOTAL AMOUNT", "id": "usd_total"},
+                        {"name": "FTD'S", "id": "count_ftd"},
+                        {"name": "GENERAL LTV", "id": "general_ltv"},
+                    ],
+                    page_size=15,
+                    style_cell={"textAlign": "center", "color": "#f2f2f2", "backgroundColor": "#1a1a1a"},
+                    style_header={"backgroundColor": "#D4AF37", "color": "#000", "fontWeight": "bold"},
+                ),
+            ])
+        ])
+    ]
 )
 
 
-# === 🔟 Callback ===
+# === 🔟 CALLBACK ===
 @app.callback(
     [
         Output("indicador-ftds", "children"),
@@ -247,11 +201,14 @@ app.layout = html.Div(
     ],
 )
 def actualizar_dashboard(start, end, affiliates, sources, countries):
+
     df_filtrado = df.copy()
 
     if start and end:
-        start_dt, end_dt = pd.to_datetime(start), pd.to_datetime(end)
-        df_filtrado = df_filtrado[(df_filtrado["date"] >= start_dt) & (df_filtrado["date"] <= end_dt)]
+        df_filtrado = df_filtrado[
+            (df_filtrado["date"] >= pd.to_datetime(start)) &
+            (df_filtrado["date"] <= pd.to_datetime(end))
+        ]
     if affiliates:
         df_filtrado = df_filtrado[df_filtrado["affiliate"].isin(affiliates)]
     if sources:
@@ -259,16 +216,32 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
     if countries:
         df_filtrado = df_filtrado[df_filtrado["country"].isin(countries)]
 
-    df_agregado = (
-        df_filtrado.groupby(["date", "country", "affiliate", "source"], as_index=False)
-        .agg({"usd_total": "sum", "count_ftd": "sum"})
-    )
-    df_agregado["general_ltv"] = df_agregado.apply(
-        lambda r: r["usd_total"] / r["count_ftd"] if r["count_ftd"] > 0 else 0, axis=1
+    # ======================================================
+    # 🔥 GENERAL LTV MENSUAL (FTD + RTN) / FTD
+    # ======================================================
+    df_filtrado["month"] = df_filtrado["date"].dt.to_period("M")
+
+    df_month = (
+        df_filtrado
+        .groupby(["month", "country", "affiliate", "source"], as_index=False)
+        .apply(lambda x: pd.Series({
+            "usd_total": x["usd_total"].sum(),
+            "count_ftd": (x["deposit_type"] == "Ftd").sum()
+        }))
+        .reset_index(drop=True)
     )
 
-    total_amount = df_agregado["usd_total"].sum()
-    total_ftds = df_agregado["count_ftd"].sum()
+    df_month["general_ltv"] = df_month.apply(
+        lambda r: r["usd_total"] / r["count_ftd"] if r["count_ftd"] > 0 else 0,
+        axis=1
+    )
+
+    df_month["date"] = df_month["month"].dt.to_timestamp("M")
+    df_month.drop(columns=["month"], inplace=True)
+
+    # === KPIs ===
+    total_amount = df_month["usd_total"].sum()
+    total_ftds = df_month["count_ftd"].sum()
     general_ltv_total = total_amount / total_ftds if total_ftds > 0 else 0
 
     card_style = {
@@ -281,49 +254,73 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
     }
 
     indicador_ftds = html.Div([
-        html.H4("FTD'S", style={"color": "#D4AF37", "fontWeight": "bold"}),
-        html.H2(f"{int(total_ftds):,}", style={"color": "#FFFFFF", "fontSize": "36px"})
+        html.H4("FTD'S", style={"color": "#D4AF37"}),
+        html.H2(f"{int(total_ftds):,}", style={"color": "#FFF"})
     ], style=card_style)
 
     indicador_amount = html.Div([
-        html.H4("TOTAL AMOUNT", style={"color": "#D4AF37", "fontWeight": "bold"}),
-        html.H2(f"${formato_km(total_amount)}", style={"color": "#FFFFFF", "fontSize": "36px"})
+        html.H4("TOTAL AMOUNT", style={"color": "#D4AF37"}),
+        html.H2(f"${formato_km(total_amount)}", style={"color": "#FFF"})
     ], style=card_style)
 
     indicador_ltv = html.Div([
-        html.H4("GENERAL LTV (AMOUNT / FTD'S)", style={"color": "#D4AF37", "fontWeight": "bold"}),
-        html.H2(f"${general_ltv_total:,.2f}", style={"color": "#FFFFFF", "fontSize": "36px"})
+        html.H4("GENERAL LTV", style={"color": "#D4AF37"}),
+        html.H2(f"${general_ltv_total:,.2f}", style={"color": "#FFF"})
     ], style=card_style)
 
-    df_aff = df_agregado.groupby("affiliate", as_index=False).agg({"usd_total": "sum", "count_ftd": "sum"})
-    df_aff["general_ltv"] = df_aff.apply(lambda r: r["usd_total"] / r["count_ftd"] if r["count_ftd"] > 0 else 0, axis=1)
+    # === GRÁFICAS ===
+    df_aff = df_month.groupby("affiliate", as_index=False).agg(
+        {"usd_total": "sum", "count_ftd": "sum"}
+    )
+    df_aff["general_ltv"] = df_aff["usd_total"] / df_aff["count_ftd"]
 
-    fig_affiliate = px.pie(df_aff, names="affiliate", values="general_ltv",
-                           title="GENERAL LTV by Affiliate", color_discrete_sequence=px.colors.sequential.YlOrBr)
+    fig_affiliate = px.pie(
+        df_aff, names="affiliate", values="general_ltv",
+        title="GENERAL LTV by Affiliate",
+        color_discrete_sequence=px.colors.sequential.YlOrBr
+    )
 
-    df_cty = df_agregado.groupby("country", as_index=False).agg({"usd_total": "sum", "count_ftd": "sum"})
-    df_cty["general_ltv"] = df_cty.apply(lambda r: r["usd_total"] / r["count_ftd"] if r["count_ftd"] > 0 else 0, axis=1)
+    df_cty = df_month.groupby("country", as_index=False).agg(
+        {"usd_total": "sum", "count_ftd": "sum"}
+    )
+    df_cty["general_ltv"] = df_cty["usd_total"] / df_cty["count_ftd"]
 
-    fig_country = px.pie(df_cty, names="country", values="general_ltv",
-                         title="GENERAL LTV by Country", color_discrete_sequence=px.colors.sequential.YlOrBr)
+    fig_country = px.pie(
+        df_cty, names="country", values="general_ltv",
+        title="GENERAL LTV by Country",
+        color_discrete_sequence=px.colors.sequential.YlOrBr
+    )
 
-    df_bar = df_agregado.groupby(["country", "affiliate"], as_index=False).agg({"usd_total": "sum", "count_ftd": "sum"})
-    df_bar["general_ltv"] = df_bar.apply(lambda r: r["usd_total"] / r["count_ftd"] if r["count_ftd"] > 0 else 0, axis=1)
-
-    fig_bar = px.bar(df_bar, x="country", y="general_ltv", color="affiliate",
-                     title="GENERAL LTV by Country and Affiliate", barmode="group",
-                     color_discrete_sequence=px.colors.sequential.YlOrBr)
+    fig_bar = px.bar(
+        df_month,
+        x="country",
+        y="general_ltv",
+        color="affiliate",
+        barmode="group",
+        title="GENERAL LTV by Country and Affiliate",
+        color_discrete_sequence=px.colors.sequential.YlOrBr
+    )
 
     for fig in [fig_affiliate, fig_country, fig_bar]:
-        fig.update_layout(paper_bgcolor="#0d0d0d", plot_bgcolor="#0d0d0d",
-                          font_color="#f2f2f2", title_font_color="#D4AF37")
+        fig.update_layout(
+            paper_bgcolor="#0d0d0d",
+            plot_bgcolor="#0d0d0d",
+            font_color="#f2f2f2",
+            title_font_color="#D4AF37"
+        )
 
-    tabla = df_agregado.copy()
+    tabla = df_month.copy()
     tabla["date"] = tabla["date"].dt.strftime("%Y-%m-%d")
-    tabla_data = tabla.round(2).to_dict("records")
 
-    return indicador_ftds, indicador_amount, indicador_ltv, fig_affiliate, fig_country, fig_bar, tabla_data
-
+    return (
+        indicador_ftds,
+        indicador_amount,
+        indicador_ltv,
+        fig_affiliate,
+        fig_country,
+        fig_bar,
+        tabla.round(2).to_dict("records")
+    )
 
 # === 9️⃣ Captura PDF/PPT desde iframe ===
 app.index_string = '''
@@ -371,4 +368,5 @@ app.index_string = '''
 
 if __name__ == "__main__":
     app.run_server(debug=True, port=8053)
+
 
