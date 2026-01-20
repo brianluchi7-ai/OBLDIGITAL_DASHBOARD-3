@@ -178,9 +178,11 @@ app.layout = html.Div(
                         html.Div(
                             style={"display": "flex", "justifyContent": "space-around"},
                             children=[
-                                html.Div(id="indicador-ftds", style={"width": "30%"}),
-                                html.Div(id="indicador-amount", style={"width": "30%"}),
-                                html.Div(id="indicador-ltv", style={"width": "30%"}),
+                                html.Div(id="indicador-ftds", style={"width": "18%"}),
+                                html.Div(id="indicador-amount", style={"width": "18%"}),
+                                html.Div(id="indicador-usd-ftd", style={"width": "18%"}),
+                                html.Div(id="indicador-usd-rtn", style={"width": "18%"}),
+                                html.Div(id="indicador-ltv", style={"width": "18%"}),
                             ]
                         ),
 
@@ -230,13 +232,14 @@ app.layout = html.Div(
 )
 
 
-
 # === 🔟 CALLBACK ===
 @app.callback(
     [
         Output("indicador-ftds", "children"),
         Output("indicador-amount", "children"),
         Output("indicador-ltv", "children"),
+        Output("indicador-usd-ftd", "children"),
+        Output("indicador-usd-rtn", "children"),
         Output("grafico-ltv-affiliate", "figure"),
         Output("grafico-ltv-country", "figure"),
         Output("grafico-bar-country-aff", "figure"),
@@ -289,14 +292,20 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
     df_month["date"] = df_month["month"].dt.to_timestamp("M")
     df_month.drop(columns=["month"], inplace=True)
 
-    # === KPIs (BASE REAL - MISMA LÓGICA QUE COMISIONES) ===
-
-    # FTDs reales (conteo directo del dataframe base)
+    # === KPIs ===
     total_ftds = (df_filtrado["deposit_type"].str.upper() == "FTD").sum()
-    
-    # Total USD real (FTD + RTN)
     total_amount = df_filtrado["usd_total"].sum()
-    
+
+    usd_ftd = df_filtrado.loc[
+        df_filtrado["deposit_type"].str.upper() == "FTD",
+        "usd_total"
+    ].sum()
+
+    usd_rtn = df_filtrado.loc[
+        df_filtrado["deposit_type"].str.upper() != "FTD",
+        "usd_total"
+    ].sum()
+
     general_ltv_total = total_amount / total_ftds if total_ftds > 0 else 0
 
     card_style = {
@@ -316,6 +325,16 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
     indicador_amount = html.Div([
         html.H4("TOTAL AMOUNT", style={"color": "#D4AF37"}),
         html.H2(f"${formato_km(total_amount)}", style={"color": "#FFF"})
+    ], style=card_style)
+
+    indicador_usd_ftd = html.Div([
+        html.H4("USD FTD", style={"color": "#D4AF37"}),
+        html.H2(f"${formato_km(usd_ftd)}", style={"color": "#FFF"})
+    ], style=card_style)
+
+    indicador_usd_rtn = html.Div([
+        html.H4("USD RTN", style={"color": "#D4AF37"}),
+        html.H2(f"${formato_km(usd_rtn)}", style={"color": "#FFF"})
     ], style=card_style)
 
     indicador_ltv = html.Div([
@@ -371,11 +390,14 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
         indicador_ftds,
         indicador_amount,
         indicador_ltv,
+        indicador_usd_ftd,
+        indicador_usd_rtn,
         fig_affiliate,
         fig_country,
         fig_bar,
         tabla.round(2).to_dict("records")
     )
+
 
 # === 9️⃣ Captura PDF/PPT desde iframe ===
 app.index_string = '''
@@ -420,19 +442,5 @@ app.index_string = '''
 '''
 
 
-
 if __name__ == "__main__":
     app.run_server(debug=True, port=8053)
-
-
-
-
-
-
-
-
-
-
-
-
-
