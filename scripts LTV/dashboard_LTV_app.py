@@ -289,7 +289,7 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
 
     df_month = (
         df_filtrado
-        .groupby(["month", "country", "affiliate", "source"], as_index=False)
+        .groupby(["month", "country", "affiliate", "source", "team", "agent"], as_index=False)
         .apply(lambda x: pd.Series({
             "usd_total": x["usd_total"].sum(),
             "count_ftd": (x["deposit_type"] == "Ftd").sum()
@@ -410,7 +410,7 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
         color_discrete_sequence=px.colors.sequential.YlOrBr
     )
 
-    for fig in [fig_affiliate, fig_country, fig_bar]:
+    for fig in [fig_affiliate, fig_country, fig_team, fig_agent, fig_bar]:
         fig.update_layout(
             paper_bgcolor="#0d0d0d",
             plot_bgcolor="#0d0d0d",
@@ -481,4 +481,5 @@ app.index_string = '''
 
 if __name__ == "__main__":
     app.run_server(debug=True, port=8053)
+
 
