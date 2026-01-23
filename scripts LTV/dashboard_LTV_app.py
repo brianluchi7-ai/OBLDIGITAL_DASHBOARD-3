@@ -177,16 +177,24 @@ app.layout = html.Div(
                             id="filtro-country"
                         ),
 
-                        html.H4("Team Leader", style={"color": "#D4AF37", "marginTop": "10px"}),
+                        html.H4("Team Leader (RTN)", style={"color": "#D4AF37", "marginTop": "10px"}),
                         dcc.Dropdown(
-                            sorted(df["team"].dropna().unique()),
+                            sorted(
+                                df.loc[df["deposit_type"].str.upper() == "RTN", "team"]
+                                .dropna()
+                                .unique()
+                            ),
                             multi=True,
                             id="filtro-team"
                         ),
                         
-                        html.H4("Agent", style={"color": "#D4AF37", "marginTop": "10px"}),
+                        html.H4("Agent (RTN)", style={"color": "#D4AF37", "marginTop": "10px"}),
                         dcc.Dropdown(
-                            sorted(df["agent"].dropna().unique()),
+                            sorted(
+                                df.loc[df["deposit_type"].str.upper() == "RTN", "agent"]
+                                .dropna()
+                                .unique()
+                            ),
                             multi=True,
                             id="filtro-agent"
                         ),
@@ -299,10 +307,15 @@ def actualizar_dashboard(start, end, affiliates, sources, countries, teams, agen
     if countries:
         df_filtrado = df_filtrado[df_filtrado["country"].isin(countries)]
     if teams:
-        df_filtrado = df_filtrado[df_filtrado["team"].isin(teams)]
+        df_filtrado = df_filtrado[
+            (df_filtrado["deposit_type"].str.upper() == "RTN") &
+            (df_filtrado["team"].isin(teams))
+        ]
     if agents:
-        df_filtrado = df_filtrado[df_filtrado["agent"].isin(agents)]
-
+        df_filtrado = df_filtrado[
+            (df_filtrado["deposit_type"].str.upper() == "RTN") &
+            (df_filtrado["agent"].isin(agents))
+        ]
 
     # ======================================================
     # 🔥 GENERAL LTV MENSUAL (FTD + RTN) / FTD
@@ -532,6 +545,7 @@ app.index_string = '''
 
 if __name__ == "__main__":
     app.run_server(debug=True, port=8053)
+
 
 
 
