@@ -355,51 +355,68 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
         html.H2(f"${general_ltv_total:,.2f}", style={"color": "#FFF"})
     ], style=card_style)
 
-    # === GRÁFICAS ===
+
+    # --- GENERAL LTV by AFFILIATE ---
     df_aff = df_month.groupby("affiliate", as_index=False).agg(
         {"usd_total": "sum", "count_ftd": "sum"}
     )
+    df_aff = df_aff[df_aff["count_ftd"] > 0]
     df_aff["general_ltv"] = df_aff["usd_total"] / df_aff["count_ftd"]
-
+    
     fig_affiliate = px.pie(
-        df_aff, names="affiliate", values="general_ltv",
+        df_aff,
+        names="affiliate",
+        values="general_ltv",
         title="GENERAL LTV by Affiliate",
         color_discrete_sequence=px.colors.sequential.YlOrBr
     )
-
-    df_cty = df_month.groupby("country", as_index=False).agg(
+    
+    # --- GENERAL LTV by COUNTRY ---
+    df_country = df_month.groupby("country", as_index=False).agg(
         {"usd_total": "sum", "count_ftd": "sum"}
     )
-    df_cty["general_ltv"] = df_cty["usd_total"] / df_cty["count_ftd"]
-
+    df_country = df_country[df_country["count_ftd"] > 0]
+    df_country["general_ltv"] = df_country["usd_total"] / df_country["count_ftd"]
+    
     fig_country = px.pie(
-        df_cty, names="country", values="general_ltv",
+        df_country,
+        names="country",
+        values="general_ltv",
         title="GENERAL LTV by Country",
         color_discrete_sequence=px.colors.sequential.YlOrBr
     )
-
-    df_cty = df_month.groupby("team", as_index=False).agg(
+    
+    # --- GENERAL LTV by TEAM LEADER ---
+    df_team = df_month.groupby("team", as_index=False).agg(
         {"usd_total": "sum", "count_ftd": "sum"}
     )
-    df_cty["general_ltv"] = df_cty["usd_total"] / df_cty["count_ftd"]
-
-    fig_country = px.pie(
-        df_cty, names="country", values="general_ltv",
-        title="GENERAL LTV by Country",
+    df_team = df_team[df_team["count_ftd"] > 0]
+    df_team["general_ltv"] = df_team["usd_total"] / df_team["count_ftd"]
+    
+    fig_team = px.pie(
+        df_team,
+        names="team",
+        values="general_ltv",
+        title="GENERAL LTV by Team Leader",
         color_discrete_sequence=px.colors.sequential.YlOrBr
     )
-
-    df_cty = df_month.groupby("agent", as_index=False).agg(
+    
+    # --- GENERAL LTV by AGENT ---
+    df_agent = df_month.groupby("agent", as_index=False).agg(
         {"usd_total": "sum", "count_ftd": "sum"}
     )
-    df_cty["general_ltv"] = df_cty["usd_total"] / df_cty["count_ftd"]
-
-    fig_country = px.pie(
-        df_cty, names="country", values="general_ltv",
-        title="GENERAL LTV by Country",
+    df_agent = df_agent[df_agent["count_ftd"] > 0]
+    df_agent["general_ltv"] = df_agent["usd_total"] / df_agent["count_ftd"]
+    
+    fig_agent = px.pie(
+        df_agent,
+        names="agent",
+        values="general_ltv",
+        title="GENERAL LTV by Agent",
         color_discrete_sequence=px.colors.sequential.YlOrBr
     )
-
+    
+    # --- BAR CHART ---
     fig_bar = px.bar(
         df_month,
         x="country",
@@ -409,14 +426,16 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
         title="GENERAL LTV by Country and Affiliate",
         color_discrete_sequence=px.colors.sequential.YlOrBr
     )
-
+    
+    # --- ESTILO DARK ---
     for fig in [fig_affiliate, fig_country, fig_team, fig_agent, fig_bar]:
         fig.update_layout(
             paper_bgcolor="#0d0d0d",
             plot_bgcolor="#0d0d0d",
             font_color="#f2f2f2",
             title_font_color="#D4AF37"
-        )
+        )    
+
 
     tabla = df_month.copy()
     tabla["date"] = tabla["date"].dt.strftime("%Y-%m-%d")
@@ -481,5 +500,6 @@ app.index_string = '''
 
 if __name__ == "__main__":
     app.run_server(debug=True, port=8053)
+
 
 
