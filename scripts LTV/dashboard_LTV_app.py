@@ -48,6 +48,15 @@ if "deposit_type" not in df.columns:
             df.rename(columns={alt: "deposit_type"}, inplace=True)
             break
 
+# TEAM & AGENT
+for col in ["team", "agent"]:
+    if col not in df.columns:
+        df[col] = None
+    else:
+        df[col] = df[col].astype(str).str.strip().str.title()
+        df[col].replace({"Nan": None, "None": None, "": None}, inplace=True)
+
+
 # === 3️⃣ Normalizar fechas ===
 def convertir_fecha(valor):
     try:
@@ -193,6 +202,8 @@ app.layout = html.Div(
                             children=[
                                 dcc.Graph(id="grafico-ltv-affiliate", style={"width": "48%", "height": "340px"}),
                                 dcc.Graph(id="grafico-ltv-country", style={"width": "48%", "height": "340px"}),
+                                dcc.Graph(id="grafico-ltv-team", style={"width": "48%", "height": "340px"}),
+                                dcc.Graph(id="grafico-ltv-agent", style={"width": "48%", "height": "340px"}),
                                 dcc.Graph(id="grafico-bar-country-aff", style={"width": "100%", "height": "360px"}),
                             ]
                         ),
@@ -242,6 +253,8 @@ app.layout = html.Div(
         Output("indicador-usd-rtn", "children"),
         Output("grafico-ltv-affiliate", "figure"),
         Output("grafico-ltv-country", "figure"),
+        Output("grafico-ltv-team", "figure"),
+        Output("grafico-ltv-agent", "figure"),
         Output("grafico-bar-country-aff", "figure"),
         Output("tabla-detalle", "data"),
     ],
@@ -365,6 +378,28 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
         color_discrete_sequence=px.colors.sequential.YlOrBr
     )
 
+    df_cty = df_month.groupby("team", as_index=False).agg(
+        {"usd_total": "sum", "count_ftd": "sum"}
+    )
+    df_cty["general_ltv"] = df_cty["usd_total"] / df_cty["count_ftd"]
+
+    fig_country = px.pie(
+        df_cty, names="country", values="general_ltv",
+        title="GENERAL LTV by Country",
+        color_discrete_sequence=px.colors.sequential.YlOrBr
+    )
+
+    df_cty = df_month.groupby("agent", as_index=False).agg(
+        {"usd_total": "sum", "count_ftd": "sum"}
+    )
+    df_cty["general_ltv"] = df_cty["usd_total"] / df_cty["count_ftd"]
+
+    fig_country = px.pie(
+        df_cty, names="country", values="general_ltv",
+        title="GENERAL LTV by Country",
+        color_discrete_sequence=px.colors.sequential.YlOrBr
+    )
+
     fig_bar = px.bar(
         df_month,
         x="country",
@@ -394,6 +429,8 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
         indicador_usd_rtn,
         fig_affiliate,
         fig_country,
+        fig_team,
+        fig_agent,
         fig_bar,
         tabla.round(2).to_dict("records")
     )
@@ -444,3 +481,4 @@ app.index_string = '''
 
 if __name__ == "__main__":
     app.run_server(debug=True, port=8053)
+
