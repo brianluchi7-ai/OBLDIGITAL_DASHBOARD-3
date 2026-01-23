@@ -176,6 +176,20 @@ app.layout = html.Div(
                             multi=True,
                             id="filtro-country"
                         ),
+
+                        html.H4("Team Leader", style={"color": "#D4AF37", "marginTop": "10px"}),
+                        dcc.Dropdown(
+                            sorted(df["team"].dropna().unique()),
+                            multi=True,
+                            id="filtro-team"
+                        ),
+                        
+                        html.H4("Agent", style={"color": "#D4AF37", "marginTop": "10px"}),
+                        dcc.Dropdown(
+                            sorted(df["agent"].dropna().unique()),
+                            multi=True,
+                            id="filtro-agent"
+                        ),
                     ]
                 ),
 
@@ -264,9 +278,12 @@ app.layout = html.Div(
         Input("filtro-affiliate", "value"),
         Input("filtro-source", "value"),
         Input("filtro-country", "value"),
+        Input("filtro-team", "value"),
+        Input("filtro-agent", "value"),
+
     ],
 )
-def actualizar_dashboard(start, end, affiliates, sources, countries):
+def actualizar_dashboard(start, end, affiliates, sources, countries, teams, agents):
 
     df_filtrado = df.copy()
 
@@ -281,6 +298,11 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
         df_filtrado = df_filtrado[df_filtrado["source"].isin(sources)]
     if countries:
         df_filtrado = df_filtrado[df_filtrado["country"].isin(countries)]
+    if teams:
+        df_filtrado = df_filtrado[df_filtrado["team"].isin(teams)]
+    if agents:
+        df_filtrado = df_filtrado[df_filtrado["agent"].isin(agents)]
+
 
     # ======================================================
     # 🔥 GENERAL LTV MENSUAL (FTD + RTN) / FTD
@@ -510,6 +532,7 @@ app.index_string = '''
 
 if __name__ == "__main__":
     app.run_server(debug=True, port=8053)
+
 
 
 
