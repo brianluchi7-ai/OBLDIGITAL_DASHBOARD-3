@@ -48,15 +48,6 @@ if "deposit_type" not in df.columns:
             df.rename(columns={alt: "deposit_type"}, inplace=True)
             break
 
-# TEAM & AGENT
-for col in ["team", "agent"]:
-    if col not in df.columns:
-        df[col] = None
-    else:
-        df[col] = df[col].astype(str).str.strip().str.title()
-        df[col].replace({"Nan": None, "None": None, "": None}, inplace=True)
-
-
 # === 3️⃣ Normalizar fechas ===
 def convertir_fecha(valor):
     try:
@@ -176,28 +167,6 @@ app.layout = html.Div(
                             multi=True,
                             id="filtro-country"
                         ),
-
-                        html.H4("Team Leader (RTN)", style={"color": "#D4AF37", "marginTop": "10px"}),
-                        dcc.Dropdown(
-                            sorted(
-                                df.loc[df["deposit_type"].str.upper() == "RTN", "team"]
-                                .dropna()
-                                .unique()
-                            ),
-                            multi=True,
-                            id="filtro-team"
-                        ),
-                        
-                        html.H4("Agent (RTN)", style={"color": "#D4AF37", "marginTop": "10px"}),
-                        dcc.Dropdown(
-                            sorted(
-                                df.loc[df["deposit_type"].str.upper() == "RTN", "agent"]
-                                .dropna()
-                                .unique()
-                            ),
-                            multi=True,
-                            id="filtro-agent"
-                        ),
                     ]
                 ),
 
@@ -224,8 +193,6 @@ app.layout = html.Div(
                             children=[
                                 dcc.Graph(id="grafico-ltv-affiliate", style={"width": "48%", "height": "340px"}),
                                 dcc.Graph(id="grafico-ltv-country", style={"width": "48%", "height": "340px"}),
-                                dcc.Graph(id="grafico-ltv-team", style={"width": "48%", "height": "340px"}),
-                                dcc.Graph(id="grafico-ltv-agent", style={"width": "48%", "height": "340px"}),
                                 dcc.Graph(id="grafico-bar-country-aff", style={"width": "100%", "height": "360px"}),
                             ]
                         ),
@@ -275,8 +242,6 @@ app.layout = html.Div(
         Output("indicador-usd-rtn", "children"),
         Output("grafico-ltv-affiliate", "figure"),
         Output("grafico-ltv-country", "figure"),
-        Output("grafico-ltv-team", "figure"),
-        Output("grafico-ltv-agent", "figure"),
         Output("grafico-bar-country-aff", "figure"),
         Output("tabla-detalle", "data"),
     ],
@@ -286,12 +251,9 @@ app.layout = html.Div(
         Input("filtro-affiliate", "value"),
         Input("filtro-source", "value"),
         Input("filtro-country", "value"),
-        Input("filtro-team", "value"),
-        Input("filtro-agent", "value"),
-
     ],
 )
-def actualizar_dashboard(start, end, affiliates, sources, countries, teams, agents):
+def actualizar_dashboard(start, end, affiliates, sources, countries):
 
     df_filtrado = df.copy()
 
@@ -306,17 +268,7 @@ def actualizar_dashboard(start, end, affiliates, sources, countries, teams, agen
         df_filtrado = df_filtrado[df_filtrado["source"].isin(sources)]
     if countries:
         df_filtrado = df_filtrado[df_filtrado["country"].isin(countries)]
-    if teams:
-        df_filtrado = df_filtrado[
-            (df_filtrado["deposit_type"].str.upper() == "RTN") &
-            (df_filtrado["team"].isin(teams))
-        ]
-    if agents:
-        df_filtrado = df_filtrado[
-            (df_filtrado["deposit_type"].str.upper() == "RTN") &
-            (df_filtrado["agent"].isin(agents))
-        ]
-
+   
     # ======================================================
     # 🔥 GENERAL LTV MENSUAL (FTD + RTN) / FTD
     # ======================================================
@@ -421,46 +373,6 @@ def actualizar_dashboard(start, end, affiliates, sources, countries, teams, agen
         color_discrete_sequence=px.colors.sequential.YlOrBr
     )
     
-        # --- GENERAL LTV by TEAM LEADER (SOLO RTN) ---
-    df_rtn = df_filtrado[df_filtrado["deposit_type"].str.upper() == "RTN"].copy()
-    
-    df_team = df_rtn.groupby("team", as_index=False).agg(
-        {
-            "usd_total": "sum",
-            "deposit_type": "count"
-        }
-    ).rename(columns={"deposit_type": "count_rtn"})
-    
-    df_team = df_team[df_team["count_rtn"] > 0]
-    df_team["general_ltv"] = df_team["usd_total"] / df_team["count_rtn"]
-    
-    fig_team = px.pie(
-        df_team,
-        names="team",
-        values="general_ltv",
-        title="GENERAL LTV by Team Leader (RTN)",
-        color_discrete_sequence=px.colors.sequential.YlOrBr
-    )
-    
-    # --- GENERAL LTV by AGENT (SOLO RTN) ---
-    df_agent = df_rtn.groupby("agent", as_index=False).agg(
-        {
-            "usd_total": "sum",
-            "deposit_type": "count"
-        }
-    ).rename(columns={"deposit_type": "count_rtn"})
-    
-    df_agent = df_agent[df_agent["count_rtn"] > 0]
-    df_agent["general_ltv"] = df_agent["usd_total"] / df_agent["count_rtn"]
-    
-    fig_agent = px.pie(
-        df_agent,
-        names="agent",
-        values="general_ltv",
-        title="GENERAL LTV by Agent (RTN)",
-        color_discrete_sequence=px.colors.sequential.YlOrBr
-    )
-
     # --- BAR CHART ---
     fig_bar = px.bar(
         df_month,
@@ -473,7 +385,7 @@ def actualizar_dashboard(start, end, affiliates, sources, countries, teams, agen
     )
     
     # --- ESTILO DARK ---
-    for fig in [fig_affiliate, fig_country, fig_team, fig_agent, fig_bar]:
+    for fig in [fig_affiliate, fig_country, fig_bar]:
         fig.update_layout(
             paper_bgcolor="#0d0d0d",
             plot_bgcolor="#0d0d0d",
@@ -493,8 +405,6 @@ def actualizar_dashboard(start, end, affiliates, sources, countries, teams, agen
         indicador_usd_rtn,
         fig_affiliate,
         fig_country,
-        fig_team,
-        fig_agent,
         fig_bar,
         tabla.round(2).to_dict("records")
     )
@@ -545,6 +455,7 @@ app.index_string = '''
 
 if __name__ == "__main__":
     app.run_server(debug=True, port=8053)
+
 
 
 
