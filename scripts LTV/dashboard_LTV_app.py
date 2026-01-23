@@ -386,36 +386,46 @@ def actualizar_dashboard(start, end, affiliates, sources, countries):
         color_discrete_sequence=px.colors.sequential.YlOrBr
     )
     
-    # --- GENERAL LTV by TEAM LEADER ---
-    df_team = df_month.groupby("team", as_index=False).agg(
-        {"usd_total": "sum", "count_ftd": "sum"}
-    )
-    df_team = df_team[df_team["count_ftd"] > 0]
-    df_team["general_ltv"] = df_team["usd_total"] / df_team["count_ftd"]
+        # --- GENERAL LTV by TEAM LEADER (SOLO RTN) ---
+    df_rtn = df_filtrado[df_filtrado["deposit_type"].str.upper() == "RTN"].copy()
+    
+    df_team = df_rtn.groupby("team", as_index=False).agg(
+        {
+            "usd_total": "sum",
+            "deposit_type": "count"
+        }
+    ).rename(columns={"deposit_type": "count_rtn"})
+    
+    df_team = df_team[df_team["count_rtn"] > 0]
+    df_team["general_ltv"] = df_team["usd_total"] / df_team["count_rtn"]
     
     fig_team = px.pie(
         df_team,
         names="team",
         values="general_ltv",
-        title="GENERAL LTV by Team Leader",
+        title="GENERAL LTV by Team Leader (RTN)",
         color_discrete_sequence=px.colors.sequential.YlOrBr
     )
     
-    # --- GENERAL LTV by AGENT ---
-    df_agent = df_month.groupby("agent", as_index=False).agg(
-        {"usd_total": "sum", "count_ftd": "sum"}
-    )
-    df_agent = df_agent[df_agent["count_ftd"] > 0]
-    df_agent["general_ltv"] = df_agent["usd_total"] / df_agent["count_ftd"]
+    # --- GENERAL LTV by AGENT (SOLO RTN) ---
+    df_agent = df_rtn.groupby("agent", as_index=False).agg(
+        {
+            "usd_total": "sum",
+            "deposit_type": "count"
+        }
+    ).rename(columns={"deposit_type": "count_rtn"})
+    
+    df_agent = df_agent[df_agent["count_rtn"] > 0]
+    df_agent["general_ltv"] = df_agent["usd_total"] / df_agent["count_rtn"]
     
     fig_agent = px.pie(
         df_agent,
         names="agent",
         values="general_ltv",
-        title="GENERAL LTV by Agent",
+        title="GENERAL LTV by Agent (RTN)",
         color_discrete_sequence=px.colors.sequential.YlOrBr
     )
-    
+
     # --- BAR CHART ---
     fig_bar = px.bar(
         df_month,
@@ -500,6 +510,7 @@ app.index_string = '''
 
 if __name__ == "__main__":
     app.run_server(debug=True, port=8053)
+
 
 
 
